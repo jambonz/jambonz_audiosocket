@@ -4,7 +4,9 @@
   "description": "Sample App for dealing with websocket audio in jambonz",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "jslint": "eslint index.js"
   },
   "author": "Sam Machin",
   "license": "MIT",
@@ -12,5 +14,9 @@
     "express": "^4.18.2",
     "express-ws": "^5.0.2",
     "wav-headers": "^1.0.1"
+  },
+  "devDependencies": {
+    "eslint": "^8.33.0",
+    "eslint-plugin-promise": "^6.1.1"
   }
 }
