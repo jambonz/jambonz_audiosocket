@@ -1,29 +1,32 @@
 const express = require('express');
 const fs = require('fs');
 const app = express();
+const logger = require('pino')({level: process.env.LOGLEVEL || 'info'});
+
 // eslint-disable-next-line no-unused-vars
 const expressWs = require('express-ws')(app);
 const wavHeaders = require('wav-headers');
-
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 // Serve the JSON verbs to an answer webhook
 app.post('/answer', (req, res) => {
-  const data = [{
-    verb: 'say',
-    text: 'Connecting to Socket'
-  }, {
-    verb: 'listen',
-    url: '/socket',
-    passDtmf: true
-  }];
+  const data = [
+    {
+      verb: 'say',
+      text: 'Connecting to Socket'
+    }, {
+      verb: 'listen',
+      url: '/socket',
+      passDtmf: true
+    }
+  ];
   res.json(data);
 });
 
 // Playback hello.wav to each connected call
 app.get('/hello', (req, res) => {
   //Read the wav file and encode as base64
-  const audioContent = fs.readFileSync('Digits/hello.wav', 'base64');
+  const audioContent = fs.readFileSync('digits/hello.wav', 'base64');
 
   // Build the JSON message containing the audio and metadata
   const playAudioData = JSON.stringify({
@@ -37,7 +40,7 @@ app.get('/hello', (req, res) => {
 
   // Iterate over connected calls and send object
   for (const [id, conn] of Object.entries(calls)) {
-    console.log(id); // Log call Sid
+    logger.debug(id); // Log call Sid
     conn.send(playAudioData);
   }
   res.send('ok');
@@ -47,6 +50,7 @@ const calls = {};
 
 // Handle the WebSocket Connection
 app.ws('/socket', function(conn, req) {
+  logger.info('socket Connected');
   conn.on('message', function(msg) {
     if (typeof msg != 'string') { // These are the binary messages containing the call audio
       const newBuffer = Buffer.concat([conn.callBuffer, msg]); // append the call audio to the call buffer
@@ -57,10 +61,11 @@ app.ws('/socket', function(conn, req) {
         conn.calldata = data; // Store the call data against the conn object
         conn.callBuffer = Buffer.alloc(640); // allocate a buffer on the conn object to record the audio to
         calls[data.callSid] = conn; // Add the connection to the calls object keyed by callSid
+        logger.debug({data}, 'received initial message');
       }
       else if ('event' in data) { //This is a dtmf event message
         //Read the wav file and encode as base64
-        const audioContent = fs.readFileSync(`Digits/${data.dtmf}.wav`, 'base64');
+        const audioContent = fs.readFileSync(`digits/${data.dtmf}.wav`, 'base64');
         const playAudioData = JSON.stringify({
           type: 'playAudio',
           data: {
@@ -72,13 +77,14 @@ app.ws('/socket', function(conn, req) {
         conn.send(playAudioData); // Write the message to the Socket
       }
       else {
-        console.log(msg); //These are other notification messages about the playback completing of the sent audio
+        //These are other notification messages about the playback completing of the sent audio
+        logger.debug({msg}, 'unhandled message');
       }
     }
   });
   conn.on('close', function() {
     // When the websocket is closed the call is ended, we will now write the buffered RAW audio to a WAV file.
-    console.log('Call Ended');
+    logger.info('socket closed');
     delete calls[conn.calldata.callSid]; // Remove the connection from the calls object
     //Specify the WAV header data based on the contents of the inital message
     const options = {
@@ -99,5 +105,5 @@ app.ws('/socket', function(conn, req) {
 });
 
 app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`);
+  logger.info(`jambonz_websocket app listening on port ${port}`);
 });
